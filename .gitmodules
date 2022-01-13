@@ -1,0 +1,6 @@
+[submodule "dependencies/linenoise"]
+	path = dependencies/linenoise
+	url = https://github.com/antirez/linenoise
+[submodule "dependencies/libelfin"]
+	path = dependencies/libelfin
+	url = https://github.com/TartanLlama/libelfin/
