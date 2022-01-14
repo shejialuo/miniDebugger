@@ -3,8 +3,13 @@ project(miniDebugger)
 
 set(CMAKE_CXX_STANDARD 14)
 
-include_directories(dependencies/libelfin dependencies/linenoise include)
-add_executable(miniDebugger src/miniDebugger.cpp dependencies/linenoise/linenoise.c)
+include_directories(dependencies/libelfin
+        dependencies/spdlog/include
+        dependencies/linenoise include)
+aux_source_directory(src/ ALL_SRC)
+add_executable(miniDebugger
+        ${ALL_SRC}
+        dependencies/linenoise/linenoise.c)
 
 add_executable(hello examples/hello.cpp)
 set_target_properties(hello
