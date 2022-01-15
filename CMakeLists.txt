@@ -13,7 +13,7 @@ add_executable(miniDebugger
 
 add_executable(hello examples/hello.cpp)
 set_target_properties(hello
-        PROPERTIES COMPILE_FLAGS "-g -O0")
+        PROPERTIES COMPILE_FLAGS "-gdwarf-2 -O0")
 
 add_executable(variable examples/variable.cpp)
 set_target_properties(variable
