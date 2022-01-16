@@ -42,6 +42,12 @@ bool Debugger::isPrefix(const std::string& s, const std::string& of) {
   return std::equal(s.cbegin(), s.cend(), of.cbegin());
 }
 
+bool Debugger::isSuffix(const std::string& s, const std::string& of) {
+    if (s.size() > of.size()) return false;
+    auto diff = of.size() - s.size();
+    return std::equal(s.begin(), s.end(), of.begin() + diff);
+}
+
 void Debugger::continueExecution() {
   stepOverBreakpoint();
   ptrace(PTRACE_CONT, pid, nullptr, nullptr);
@@ -53,6 +59,51 @@ void Debugger::setBreakPointAtAddress(std::intptr_t addr) {
   Breakpoint breakpoint{pid, addr};
   breakpoint.enable();
   breakpoints[addr] = breakpoint;
+}
+
+void Debugger::setBreakPointAtFunction(const std::string& name) {
+  for(const auto& compilationUnit: pDwarf.compilation_units()) {
+    for(const auto& die: compilationUnit.root()) {
+      if(die.has(dwarf::DW_AT::name) && at_name(die) == name) {
+        auto lowPC = at_low_pc(die);
+        auto entry = getLineEntryFromPC(lowPC);
+        ++entry; //skip prologue
+        setBreakPointAtAddress(offsetDwarfAddress(entry->address));
+      }
+    }
+  }
+}
+
+void Debugger::setBreakPointAtSouceLine(const std::string& file, unsigned line) {
+  for (const auto& compilationUnit: pDwarf.compilation_units()) {
+    if(isSuffix(file, at_name(compilationUnit.root()))) {
+      const auto& lt = compilationUnit.get_line_table();
+
+      for(const auto& entry: lt) {
+        if(entry.is_stmt && entry.line == line) {
+          setBreakPointAtAddress(offsetDwarfAddress(entry.address));
+          return;
+        }
+      }
+    }
+  }
+}
+
+std::vector<Sym> Debugger::lookupSymbol(const std::string& name) {
+  std::vector<Sym> syms;
+  for(auto& section: pElf.sections()) {
+    if(section.get_hdr().type != elf::sht::symtab && section.get_hdr().type != elf::sht::dynsym) {
+      continue;
+    }
+
+    for(auto sym: section.as_symtab()) {
+      if(sym.get_name() == name) {
+        auto &data = sym.get_data();
+        syms.push_back(Sym{elfToSymType11(data.type()), sym.get_name(), data.value});
+      }
+    }
+  }
+  return syms;
 }
 
 void Debugger::stepOverBreakpoint() {
@@ -283,8 +334,15 @@ void Debugger::handleCommand(const std::string& line) {
       * For simplicity, this code assumes that user
       * input 0xADRRESS
     */
-    std::string address {args[1],2};
-    setBreakPointAtAddress(std::stol(address,0, 16));
+    if(args[1][0] == '0' && args[1][1] == 'x') {
+      std::string address {args[1],2};
+      setBreakPointAtAddress(std::stol(address,0, 16));
+    } else if (args[1].find(':') != std::string::npos) {
+      auto fileAndLine = split(args[1], ':');
+      setBreakPointAtSouceLine(fileAndLine[0], std::stoi(fileAndLine[1]));
+    } else {
+      setBreakPointAtFunction(args[1]);
+    }
   } else if(isPrefix(command, "register")) {
     if(isPrefix(args[1], "dump")) {
       memory.dumpRegisters();
@@ -311,7 +369,13 @@ void Debugger::handleCommand(const std::string& line) {
     stepOver();
   } else if(isPrefix(command, "finish")) {
     stepOut();
-  } else {
+  } else if(isPrefix(command, "symbol")) {
+    auto syms = lookupSymbol(args[1]);
+    for(auto sym: syms) {
+      spdlog::info("{0} {1} 0x{2:x}", sym.name, symToString(sym.type), sym.address);
+    }
+  }
+  else {
     spdlog::error("Unknown command");
   }
 }
