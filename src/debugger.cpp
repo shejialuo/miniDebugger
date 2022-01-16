@@ -69,6 +69,99 @@ void Debugger::stepOverBreakpoint() {
   }
 }
 
+void Debugger::singleStepInstruction() {
+  ptrace(PTRACE_SINGLESTEP, pid, nullptr, nullptr);
+  waitForSignal();
+}
+
+void Debugger::singleStepInstructionWithBreakpointCheck() {
+  // First, check to see if we need to disable and enale breakpoint
+  if(breakpoints.count(memory.getPC())) {
+    stepOverBreakpoint();
+  } else {
+    singleStepInstruction();
+  }
+}
+
+void Debugger::stepOut() {
+  auto framePointer = memory.getRegisterValue(Reg::rbp);
+  auto returnAddress = memory.readMemory(framePointer + 8);
+
+  bool shouldRemoveBreakpoint = false;
+  if(!breakpoints.count(returnAddress)) {
+    setBreakPointAtAddress(returnAddress);
+    shouldRemoveBreakpoint = true;
+  }
+
+  continueExecution();
+
+  if(shouldRemoveBreakpoint) {
+    removeBreakpoint(returnAddress);
+  }
+}
+
+void Debugger::removeBreakpoint(std::intptr_t address) {
+  if(breakpoints.at(address).isEnabled()) {
+    breakpoints.at(address).disable();
+  }
+  breakpoints.erase(address);
+}
+
+void Debugger::stepIn() {
+  /*
+    * A simple algorithm is to just keep on stepping
+    * over instructions until we get to a new line.
+  */
+  auto line = getLineEntryFromPC(getOffsetPC())->line;
+  while(getLineEntryFromPC(getOffsetPC())->line == line) {
+    singleStepInstructionWithBreakpointCheck();
+  }
+  auto lineEntry = getLineEntryFromPC(getOffsetPC());
+  printSource(lineEntry->file->path, lineEntry->line);
+}
+
+uint64_t Debugger::getOffsetPC() {
+  return offsetLoadAddress(memory.getPC());
+}
+
+void Debugger::stepOver() {
+  auto func = getFunctionFromPC(getOffsetPC());
+  auto funcEntry = at_low_pc(func);
+  auto funcEnd = at_high_pc(func);
+
+  auto line = getLineEntryFromPC(funcEntry);
+  auto startLine = getLineEntryFromPC(getOffsetPC());
+
+  std::vector<std::intptr_t> toDelete {};
+
+  while(line->address < funcEnd) {
+    auto loadAddress = offsetDwarfAddress(line->address);
+    if(line->address != startLine->address && !breakpoints.count(loadAddress)) {
+      setBreakPointAtAddress(loadAddress);
+      toDelete.push_back(loadAddress);
+    }
+    ++line;
+  }
+
+  auto framePointer = memory.getRegisterValue(Reg::rbp);
+  auto returnAddress = memory.readMemory(framePointer + 8);
+
+  if(!breakpoints.count(returnAddress)) {
+    setBreakPointAtAddress(returnAddress);
+    toDelete.push_back(returnAddress);
+  }
+
+  continueExecution();
+
+  for(auto address: toDelete) {
+    removeBreakpoint(address);
+  }
+}
+
+uint64_t Debugger::offsetDwarfAddress(uint64_t address) {
+  return address + loadAddress;
+}
+
 dwarf::die Debugger::getFunctionFromPC(uint64_t pc) {
   for(auto &compilationUnit: pDwarf.compilation_units()) {
     if(dwarf::die_pc_range(compilationUnit.root()).contains(pc)) {
@@ -212,7 +305,13 @@ void Debugger::handleCommand(const std::string& line) {
       std::string value {args[3], 2};
       memory.writeMemory(std::stol(address, 0, 16), std::stol(value, 0, 16));
     }
-  }else {
+  } else if(isPrefix(command, "step")) {
+    stepIn();
+  } else if(isPrefix(command, "next")) {
+    stepOver();
+  } else if(isPrefix(command, "finish")) {
+    stepOut();
+  } else {
     spdlog::error("Unknown command");
   }
 }

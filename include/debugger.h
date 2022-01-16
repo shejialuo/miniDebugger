@@ -47,6 +47,22 @@ private:
   void waitForSignal();
   // Step over the breakpoint, note that stepping over.
   void stepOverBreakpoint();
+  // Step single instruction
+  void singleStepInstruction();
+  // Step single instrution with breakpoint check
+  void singleStepInstructionWithBreakpointCheck();
+  // Step out
+  void stepOut();
+  // Remove breakpoint
+  void removeBreakpoint(std::intptr_t address);
+  // Step in
+  void stepIn();
+  // Get PC offset
+  uint64_t getOffsetPC();
+  // Step over
+  void stepOver();
+  // A helper function to offset address from DWARF info by the load address
+  uint64_t offsetDwarfAddress(uint64_t address);
   // Get function from PC
   dwarf::die getFunctionFromPC(uint64_t pc);
   // Get line entry from PC
