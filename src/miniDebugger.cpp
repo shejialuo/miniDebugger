@@ -1,11 +1,11 @@
-#include <iostream>
-#include <unistd.h>
-#include <sys/ptrace.h>
-#include <spdlog/spdlog.h>
 #include <debugger.h>
+#include <iostream>
+#include <spdlog/spdlog.h>
+#include <sys/ptrace.h>
+#include <unistd.h>
 
-int main(int argc, char* argv[]) {
-  if(argc < 2) {
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
     spdlog::error("Program name out specified");
     return -1;
   }
@@ -13,11 +13,10 @@ int main(int argc, char* argv[]) {
 
   auto pid = fork();
 
-  if(pid == 0) {
-  /*
-    * In child, start ptrace and start the child process for
-    * the debugged program.
-  */
+  if (pid == 0) {
+    // `PTRACE_TRACEME` indicates that this process should
+    // allow its parent to trace it. And it would send a
+    // signal to the process.
     ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
     execl(programName, programName, nullptr);
   } else if (pid > 0) {

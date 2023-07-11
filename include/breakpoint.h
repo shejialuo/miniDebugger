@@ -1,25 +1,44 @@
 #ifndef BREAKPOINT_H
 #define BREAKPOINT_H
 
-#include <unistd.h>
 #include <cstdint>
+#include <unistd.h>
 
 class Breakpoint {
 private:
   pid_t pid;
   std::intptr_t address;
   bool enabled;
-  // data which used to be at the break point address
-  uint8_t savedData;
+  uint8_t savedData; /**< data which used to be at the break point address */
+
 public:
   Breakpoint() = default;
+  /**
+   * @brief Construct a new Breakpoint object
+   *
+   * @param p the current process
+   * @param addr the virtual address
+   */
   Breakpoint(pid_t p, std::intptr_t addr);
-  // Inject INT3 for enabling breakpoint
+
+  /**
+   * @brief Inject INT3 for enabling breakpoint
+   *
+   * @details Use `PTRACE_PEEKDATA` to get the current
+   * `addr`'s content, rewrite the lower 8 bit to `0xcc`
+   *
+   */
   void enable();
-  // Restore the acommand for disabling breakpoint
+
+  /**
+   * @brief Restore the acommand for disabling breakpoint
+   *
+   */
   void disable();
-  bool isEnabled() const {return enabled;}
-  std::intptr_t getAddress() const {return address;}
+
+  bool isEnabled() const { return enabled; }
+
+  std::intptr_t getAddress() const { return address; }
 };
 
-#endif // BREAKPOINT_H
+#endif  // BREAKPOINT_H
